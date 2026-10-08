@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INN_Reconciler | Краткое руководство</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --card: #ffffff; --text: #212529; --muted: #6c757d;
+    --primary: #0d6efd; --success: #198754; --warning: #ffc107; --danger: #dc3545;
+    --border: #dee2e6; --code-bg: #f1f3f5; --shadow: 0 4px 12px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header { background: linear-gradient(135deg, #0d6efd, #0b5ed7); color: #fff; padding: 30px; border-radius: 12px; margin-bottom: 30px; box-shadow: var(--shadow); }
+  header h1 { font-size: 2.2rem; margin-bottom: 8px; }
+  header p { opacity: 0.9; font-size: 1.1rem; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin-right: 6px; }
+  .badge-ready { background: #d1e7dd; color: #0f5132; }
+  .badge-dev { background: #fff3cd; color: #664d03; }
+  h2 { margin: 30px 0 15px; font-size: 1.6rem; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+  .card { background: var(--card); padding: 20px; border-radius: 10px; box-shadow: var(--shadow); margin-bottom: 20px; }
+  .card h3 { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 15px 0; }
+  .meta { font-size: 0.95rem; color: var(--muted); }
+  .meta strong { color: var(--text); }
+  pre { background: var(--code-bg); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 10px 0; font-family: "Fira Code", Consolas, monospace; font-size: 0.9rem; }
+  ul { padding-left: 20px; margin: 10px 0; }
+  li { margin-bottom: 6px; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin: 20px 0; font-weight: 600; }
+  .step { background: #e9ecef; padding: 10px 16px; border-radius: 8px; text-align: center; }
+  .arrow { color: var(--primary); font-size: 1.5rem; }
+  .note { background: #e7f3ff; border-left: 4px solid var(--primary); padding: 15px; border-radius: 6px; margin: 20px 0; }
+  footer { text-align: center; margin-top: 40px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--border); padding-top: 20px; }
+  @media (max-width: 768px) { header h1 { font-size: 1.8rem; } .pipeline { flex-direction: column; } .arrow { transform: rotate(90deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📦 INN_Reconciler</h1>
+    <p>Краткое руководство по скриптам, порядку запуска и архитектуре пайплайна</p>
+  </header>
+
+  <h2>🔄 Архитектура пайплайна</h2>
+  <div class="pipeline">
+    <div class="step">📥 Исходный CSV</div><div class="arrow">→</div>
+    <div class="step">1️⃣ Валидация ИНН</div><div class="arrow">→</div>
+    <div class="step">2️⃣ Парсинг ЕГРЮЛ</div><div class="arrow">→</div>
+    <div class="step">📊 HTML-отчёт</div><div class="arrow">→</div>
+    <div class="step">3️⃣ Росздравнадзор <span class="badge badge-dev">WIP</span></div>
+  </div>
+
+  <h2>📜 Описание скриптов</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>01_inn_validation.py <span class="badge badge-ready">Готов</span></h3>
+      <p class="meta"><strong>Назначение:</strong> Очистка, проверка длины и контрольной суммы по алгоритму ФНС, классификация (ЮЛ/ИП/ФЛ).</p>
+      <p class="meta"><strong>Вход:</strong> <code>data/input/*.csv</code> (1 столбец с ИНН)</p>
+      <p class="meta"><strong>Выход:</strong> <code>data/output/01_validated_inn.csv</code></p>
+      <p class="meta"><strong>Команда:</strong></p>
+      <pre>python scripts/01_inn_validation.py</pre>
+    </div>
+    <div class="card">
+      <h3>02_egrul_retry_final.py <span class="badge badge-ready">Готов</span></h3>
+      <p class="meta"><strong>Назначение:</strong> Массовое скачивание подписанных PDF-выписок ЕГРЮЛ/ЕГРИП с egrul.nalog.ru. Поддерживает ретраи, ротацию сессий, экспоненциальные задержки и безопасное прерывание.</p>
+      <p class="meta"><strong>Вход:</strong> <code>data/output/01_validated_inn.csv</code></p>
+      <p class="meta"><strong>Выход:</strong> <code>data/output/02_egrul_parsed.csv</code> + <code>data/output/pdfs/egrul_*.pdf</code></p>
+      <p class="meta"><strong>Команда:</strong></p>
+      <pre>python scripts/02_egrul_retry_final.py</pre>
+    </div>
+    <div class="card">
+      <h3>generate_report.py <span class="badge badge-ready">Готов</span></h3>
+      <p class="meta"><strong>Назначение:</strong> Генерация интерактивного HTML-отчёта с фильтрами, поиском и ссылками на скачанные PDF.</p>
+      <p class="meta"><strong>Вход:</strong> <code>data/output/02_egrul_parsed.csv</code></p>
+      <p class="meta"><strong>Выход:</strong> <code>data/output/report_egrul.html</code></p>
+      <p class="meta"><strong>Команда:</strong></p>
+      <pre>python scripts/generate_report.py</pre>
+    </div>
+  </div>
+
+  <h2>🚀 Быстрый запуск</h2>
+  <div class="card">
+    <ol>
+      <li><strong>Установи зависимости:</strong>
+        <pre>pip install pandas requests</pre>
+      </li>
+      <li><strong>Подготовь структуру:</strong>
+        <pre>mkdir -p data/input data/output/pdfs</pre>
+      </li>
+      <li><strong>Запусти пайплайн последовательно:</strong>
+        <pre>python scripts/01_inn_validation.py
+python scripts/02_egrul_retry_final.py
+python scripts/generate_report.py</pre>
+      </li>
+      <li><strong>Открой отчёт:</strong>
+        <pre>start data/output/report_egrul.html  # Windows
+xdg-open data/output/report_egrul.html # Linux
+open data/output/report_egrul.html     # macOS</pre>
+      </li>
+    </ol>
+  </div>
+
+  <h2>⚠️ Важные примечания</h2>
+  <div class="note">
+    <ul>
+      <li><strong>Не открывай <code>02_egrul_parsed.csv</code> в Excel во время работы скрипта.</strong> Windows блокирует файл, что вызывает <code>PermissionError</code>.</li>
+      <li><strong>Прогресс сохраняется автоматически.</strong> При прерывании (Ctrl+C) или сбое просто перезапусти скрипт. Уже скачанные PDF будут пропущены.</li>
+      <li><strong>Анти-бот защита ФНС:</strong> При массовых запросах возможны <code>400/429</code> или требование CAPTCHA. Скрипт обрабатывает это через задержки и ротацию сессий. Для полного покрытия >95% рекомендуется запускать ночью или разбить на batches по 100 ИНН.</li>
+      <li><strong>Версия Python:</strong> Требуется <code>3.10+</code> для стабильной работы <code>pandas</code> и <code>requests</code>.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>📅 Последнее обновление: 15.04.2026 | 🛠️ Поддерживается: Валентин + AI-ассистент</p>
+    <p>Статус проекта: <span class="badge badge-ready">Этап 2 завершён</span> → Следующий: <code>03_rozdrav_parsing.py</code></p>
+  </footer>
+</div>
+</body>
+</html>
